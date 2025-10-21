@@ -21,6 +21,7 @@ void CalculatingDimensionDiagonals(int sizes[], int n, int m)
 }
 void InputDiagMatrix(real**& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, int& maxIter, string filename)
 {
+
     try
     {
         ifstream fin(filename);
