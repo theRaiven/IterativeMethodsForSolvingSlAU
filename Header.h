@@ -10,6 +10,32 @@ using real = double;
 using realS = double;
 const int accuracy = 15;
 
+struct Matrix
+{
+    real* d4l = nullptr; // -4-m
+    real* d3l = nullptr; // -3-m
+    real* d2l = nullptr; // -2-m
+    real* d1l = nullptr; // -1
+    real* d0 = nullptr; // 0
+    real* d1u = nullptr; // 1
+    real* d2u = nullptr; // 2+m
+    real* d3u = nullptr; // 3+m
+    real* d4u = nullptr; // 4+m
+
+    ~Matrix()
+    {
+        delete[] d4l;
+        delete[] d3l;
+        delete[] d2l;
+        delete[] d1l;
+        delete[] d0;
+        delete[] d1u;
+        delete[] d2u;
+        delete[] d3u;
+        delete[] d4u;
+    }
+};
+
 //
 template<typename T>
 constexpr T relativeEPS();
@@ -21,48 +47,10 @@ template<>
 constexpr double relativeEPS<double>() { return 1e-15; }
 
 
-void InputDiagMatrix(real**& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, int& maxIter, string filename);
+void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, int& maxIter, string filename);
 void CalculatingDimensionDiagonals(int sizes[], int n, int m);
-template<class T>
-void PrintMatrix(T** A, int n, int m)
-{
-    cout << n << endl;
-    int sizes[9];
+void PrintMatrixStruct(const Matrix& A, int n, int m);
 
-    int k{ 0 };
-    for (int i = 3; i > 0; i--)
-    {
-        sizes[k++] = n - m - (i + 1);
-    }
+void PrintMatrix(real* A, int n);
 
-
-    sizes[k++] = n - 1;
-    sizes[k++] = n;
-    sizes[k++] = n - 1;
-
-    for (int i = 1; i <= 3; i++)
-    {
-        sizes[k++] = n - m - (i + 1);
-    }
-    for (int i = 0; i < 9; i++)
-    {
-        for (int j = 0; j < sizes[i]; j++)
-        {
-            cout <<  A[i][j] << ' ';
-        }
-        cout << endl;
-    }
-}
-template<class T>
-void PrintMatrix(T* A, int n)
-{
-    for (int j = 0; j < n; j++)
-    {
-        cout << setprecision(accuracy) <<  A[j] << ' ';
-    }
-    cout << endl;
-
-}
-
-void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, bool isJacobi);
 void WorkingWithIterMethods();

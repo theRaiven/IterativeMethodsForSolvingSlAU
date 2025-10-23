@@ -1,13 +1,82 @@
 ﻿#include "Header.h"
 #include <cmath>
 using namespace std;
-void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, bool isJacobi)
+void MultiplyMatrixByVector(const Matrix& A, const real* x, real* f, int n, int m, int offsets[], int sizes[])
 {
-    if (!A || !f || !x || !xTrue)
+    for (int i = 0; i < n; i++)
     {
-        cerr << "Ошибка: один из входных массивов равен nullptr!" << endl;
-        return;
+        f[i] = 0.0;
+        for (int d = 0; d < 9; ++d)
+        {
+            int offset = offsets[d];
+            int j = i + offset;
+
+            if (j < 0 || j >= n) continue;
+
+            int i_min = max(0, -offset);
+            int idx = i - i_min;
+
+            if (idx < 0 || idx >= sizes[d]) continue;
+
+            real aij{ 0.0 };
+            switch (d)
+            {
+            case 0: aij = A.d4l[idx]; break;
+            case 1: aij = A.d3l[idx]; break;
+            case 2: aij = A.d2l[idx]; break;
+            case 3: aij = A.d1l[idx]; break;
+            case 4: aij = A.d0[idx];  break;
+            case 5: aij = A.d1u[idx]; break;
+            case 6: aij = A.d2u[idx]; break;
+            case 7: aij = A.d3u[idx]; break;
+            case 8: aij = A.d4u[idx]; break;
+            }
+            f[i] += aij * x[j];
+        }
     }
+}
+real CalculateRelativeResidual(const Matrix& A, const real* x, const real* f, int n, int m, int offsets[], int sizes[])
+{
+    real* Ax = new real[n];
+    MultiplyMatrixByVector(A, x, Ax, n, m, offsets, sizes);
+
+    real normR_sq = 0.0;
+    real normF_sq = 0.0;
+
+    for (int i = 0; i < n; i++)
+    {
+        real ri = f[i] - Ax[i];
+        normR_sq += ri * ri;
+        normF_sq += f[i] * f[i];
+    }
+
+    delete[] Ax;
+
+    if (normF_sq == 0) return 0.0;
+    return sqrt(normR_sq / normF_sq);
+}
+void PrintResults(real omega, int iter, real normR, const real* x, const real* xTrue, int n)
+{
+    cout << fixed << setprecision(2) << "w = " << omega;
+    cout << ", Iter = " << iter;
+    cout << scientific << setprecision(15) << ", normR = " << normR << endl;
+
+    cout << "i\t x_i" << endl;
+    for (int i = 0; i < n; i++)
+    {
+        cout << x[i] << endl;
+    }
+
+    cout << "i\t x* _i - x_i" << endl;
+    for (int i = 0; i < n; i++)
+    {
+        cout << xTrue[i] - x[i] << endl;
+    }
+    cout << endl << endl;
+}
+void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, bool isJacobi, int offsets[], int sizes[])
+{
+    
     if (n <= 0 || m < 0)
     {
         cerr << "Ошибка: некорректные размеры n или m!" << endl;
@@ -20,11 +89,6 @@ void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real
     }
     real* xNew = new real[n];
     real* r = new real[n];
-    
-    int sizes[9];
-    CalculatingDimensionDiagonals(sizes, n, m);
-
-    int offsets[]{ -4 - m, -3 - m, -2 - m, -1, 0, 1, 2 + m, 3 + m, 4 + m };
 
     real normR{ 0.0 };
     int iter{ 0 };
@@ -34,104 +98,48 @@ void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real
         {
             real sum{ 0.0 };
 
-            for (int j = 0; j < n; j++)
+            for (int d = 0; d < 9; ++d)
             {
-                int diff{ j - i };
-                int d { -1 };
+                int offset = offsets[d];
+                int j = i + offset;
 
-                if (diff <= -2 - m)
-                {
-                    d = diff + 4 + m;
-                }
-                else if (diff >= -1 && diff <= 1)
-                {
-                    d = diff + 4;
-                }
-                else if (diff >= 2 + m)
-                {
-                    d = diff - 2 - m + 6;
-                }
-                if (d < 0 || d > 8) continue;
+                if (j < 0 || j >= n) continue;
 
-                int offset{ 0 };
-                if (d <= 2) offset = -4 - m + d;      // левая группа
-                else if (d <= 5) offset = d - 4;      // центральная группа
-                else offset = d - 6 + 2 + m;          // правая группа
+                int i_min = max(0, -offset);
+                int idx = i - i_min;
 
-                int i_min{ max(0, -offset) };
-                int idx{ i - i_min };
+                if (idx < 0 || idx >= sizes[d]) continue;
 
-                if (idx < 0 || idx >= sizes[d]) continue; // элемент вне диапазона
-                real aij{ A[d][idx] };
-
-                if (isJacobi)
+                real aij{ 0.0 };
+                switch (d)
                 {
-                    sum += aij * x[j];
+                case 0: aij = A.d4l[idx]; break;
+                case 1: aij = A.d3l[idx]; break;
+                case 2: aij = A.d2l[idx]; break;
+                case 3: aij = A.d1l[idx]; break;
+                case 5: aij = A.d1u[idx]; break;
+                case 6: aij = A.d2u[idx]; break;
+                case 7: aij = A.d3u[idx]; break;
+                case 8: aij = A.d4u[idx]; break;
                 }
-                else
-                {
-                    sum += aij * (j < i ? x[j] : x[j]);
-                }
-            }
-            
-            real x_next = (f[i] - sum) / A[4][i];
-            if (isnan(x_next) || isinf(x_next))
-            {
-                cerr << "Ошибка: вычислен NaN/Inf на итерации " << iter << " в элементе " << i << endl;
-                delete[] xNew;
-                delete[] r;
-                return;
+
+                sum += aij * x[j];
             }
 
-            
+            real x_next = (f[i] - sum) / A.d0[i];
+
             if (isJacobi)
-                xNew[i] = x[i] + omega * (x_next);
+                xNew[i] = x[i] + omega * (x_next - x[i]);
             else
-                x[i] = x[i] + omega * (x_next);
+                x[i] = x[i] + omega * (x_next - x[i]);
         }
 
         if (isJacobi)
         {
-            for (int i = 0; i < n; i++)
-                x[i] = xNew[i];
-        }
-        // === вычисление относительной невязки ===
-        normR = 0.0;
-        real normF = 0.0;
-
-        for (int i = 0; i < n; i++)
-        {
-            real Ax{ 0.0 };
-
-            for (int j = 0; j < n; j++)
-            {
-                int diff{ j - i };
-                int d{ -1 };
-
-                if (diff <= -2 - m)
-                    d = diff + 4 + m;          // левая группа
-                else if (diff >= -1 && diff <= 1)
-                    d = diff + 4;              // центральная группа
-                else if (diff >= 2 + m)
-                    d = diff - 2 - m + 6;      // правая группа
-
-                if (d < 0 || d > 8) continue;
-
-                int offset = offsets[d];
-                int i_min = max(0, -offset);
-                int idx = i - i_min;
-                if (idx < 0 || idx >= sizes[d]) continue; // элемент вне диапазона
-
-                Ax += A[d][idx] * x[j];
-            }
-
-            r[i] = f[i] - Ax;
-            normR += r[i] * r[i];
-            normF += f[i] * f[i];
+            for (int i = 0; i < n; i++) x[i] = xNew[i];
         }
 
-
-        normR = sqrt(normR / normF);
+        normR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
 
         if (normR < relativeEPS<real>())
         {
@@ -139,27 +147,13 @@ void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real
             break;
         }
 
-        if (iter >= maxIter-1)
+        if (iter >= maxIter - 1)
         {
             cout << "Достигнуто максимальное число итераций." << endl;
         }
-
     }
 
-    cout << std::scientific << std::setprecision(15);
-    cout << "w = " << omega << ", Iter = " << iter << ", normR = " << normR << endl;
-    cout << "i\t x_i" << endl;
-    for (int i = 0; i < n; i++)
-    {
-        cout << x[i] << endl;
-    }
-    cout << "i\t x* _i - x_i" << endl; 
-    for (int i = 0; i < n; i++)
-    {
-
-        cout << xTrue[i] - x[i] << endl;
-    }
-    cout << endl << endl;
+    PrintResults(omega, iter, normR, x, xTrue, n);
 
     for (int i = 0; i < n; i++)
     {
@@ -168,13 +162,8 @@ void IterativeMethod(real** A, real* f, real* x, real* xTrue, int n, int m, real
     delete[] xNew;
     delete[] r;
 }
-void BlockRelaxation(real** A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, int blockSize)
+void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, int blockSize, int offsets[], int sizes[])
 {
-    if (!A || !f || !x || !xTrue)
-    {
-        cerr << "Ошибка: один из входных массивов равен nullptr!" << endl;
-        return;
-    }
     if (n <= 0 || blockSize <= 0 || blockSize > n)
     {
         cerr << "Ошибка: некорректный размер блока!" << endl;
@@ -184,87 +173,54 @@ void BlockRelaxation(real** A, real* f, real* x, real* xTrue, int n, int m, real
     real* r = new real[n];
     real normR{ 0.0 };
 
-    int sizes[9];
-    CalculatingDimensionDiagonals(sizes, n, m);
-    int offsets[]{ -4 - m, -3 - m, -2 - m, -1, 0, 1, 2 + m, 3 + m, 4 + m };
-
     int iter = 0;
     for (iter = 1; iter <= maxIter; iter++)
     {
         for (int i0 = 0; i0 < n; i0 += blockSize)
         {
-            int i1{ min(i0 + blockSize, n) };
-            int bSize{ i1 - i0 };
+            int i1 = min(i0 + blockSize, n);
 
             for (int i = i0; i < i1; i++)
             {
-                real sum{ 0.0 };
-                for (int j = 0; j < n; j++)
+                real Ax{ 0.0 };
+                for (int d = 0; d < 9; ++d)
                 {
-                    int diff{ j - i };
-                    int d{ -1 };
-                    if (diff <= -2 - m)
-                        d = diff + 4 + m;
-                    else if (diff >= -1 && diff <= 1)
-                        d = diff + 4;
-                    else if (diff >= 2 + m)
-                        d = diff - 2 - m + 6;
+                    int offset = offsets[d];
+                    int j = i + offset;
 
-                    if (d < 0 || d > 8) continue;
+                    if (j < 0 || j >= n) continue;
 
-                    int offset{ offsets[d] };
-                    int i_min{ max(0, -offset) };
-                    int idx{ i - i_min };
+                    int i_min = max(0, -offset);
+                    int idx = i - i_min;
+
                     if (idx < 0 || idx >= sizes[d]) continue;
 
-                    real aij{ A[d][idx] };
-                    sum += aij * x[j];
+                    real aij{ 0.0 };
+                    switch (d)
+                    {
+                    case 0: aij = A.d4l[idx]; break;
+                    case 1: aij = A.d3l[idx]; break;
+                    case 2: aij = A.d2l[idx]; break;
+                    case 3: aij = A.d1l[idx]; break;
+                    case 4: aij = A.d0[idx];  break;
+                    case 5: aij = A.d1u[idx]; break;
+                    case 6: aij = A.d2u[idx]; break;
+                    case 7: aij = A.d3u[idx]; break;
+                    case 8: aij = A.d4u[idx]; break;
+                    }
+                    Ax += aij * x[j];
                 }
-                r[i] = f[i] - sum;
+                r[i] = f[i] - Ax;
             }
 
-            // A_ii * Δx_i = ω * r_i
             for (int i = i0; i < i1; i++)
             {
-                real delta = (omega * r[i]) / A[4][i];
+                real delta = (omega * r[i]) / A.d0[i];
                 x[i] += delta;
             }
         }
 
-        normR = 0.0;
-        real normF = 0.0;
-
-        for (int i = 0; i < n; i++)
-        {
-            real Ax{ 0.0 };
-            for (int j = 0; j < n; j++)
-            {
-                int diff{ j - i };
-                int d{ -1 };
-                if (diff <= -2 - m)
-                    d = diff + 4 + m;
-                else if (diff >= -1 && diff <= 1)
-                    d = diff + 4;
-                else if (diff >= 2 + m)
-                    d = diff - 2 - m + 6;
-
-                if (d < 0 || d > 8) continue;
-
-                int offset{ offsets[d] };
-                int i_min{ max(0, -offset) };
-                int idx{ i - i_min };
-                if (idx < 0 || idx >= sizes[d]) continue;
-
-                Ax += A[d][idx] * x[j];
-            }
-
-            real ri{ f[i] - Ax };
-            normR += ri * ri;
-            normF += f[i] * f[i];
-        }
-
-        normR = sqrt(normR / normF);
-        
+        normR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
 
         if (normR < relativeEPS<real>())
         {
@@ -272,19 +228,8 @@ void BlockRelaxation(real** A, real* f, real* x, real* xTrue, int n, int m, real
             break;
         }
     }
-    cout << fixed << setprecision(2) << "w = " << omega<< ", Iter = " << iter;
-    cout << std::scientific << std::setprecision(15) << ", normR = " << normR << endl;
-    for (int i = 0; i < n; i++)
-    {
-        cout << x[i] << endl;
-    }
-    cout << "i\t x* _i - x_i" << endl;
-    for (int i = 0; i < n; i++)
-    {
-
-        cout << xTrue[i] - x[i] << endl;
-    }
-    cout << endl << endl;
+    real finalNormR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
+    PrintResults(omega, iter, finalNormR, x, xTrue, n);
 
     for (int i = 0; i < n; i++)
     {
@@ -297,16 +242,19 @@ void BlockRelaxation(real** A, real* f, real* x, real* xTrue, int n, int m, real
 void WorkingWithIterMethods()
 {
 	int n, m, maxIter;
-    real** A = nullptr;
     real* xTrue = nullptr;
+    Matrix A;
     real* x0 = nullptr;
     real* y = nullptr;
-
+    int sizes[9];
+    
     try
     {
         InputDiagMatrix(A, xTrue, x0, y, n, m, maxIter, "Matrix.txt");
+        CalculatingDimensionDiagonals(sizes, n, m);
+        int offsets[]{ -4 - m, -3 - m, -2 - m, -1, 0, 1, 2 + m, 3 + m, 4 + m };
         cout << endl << n << ' ' << m << ' ' << maxIter << endl;
-        PrintMatrix(A, n, m);
+        PrintMatrixStruct(A, n, m);
         PrintMatrix(xTrue, n);
         PrintMatrix(x0, n);
         PrintMatrix(y, n);
@@ -326,7 +274,7 @@ void WorkingWithIterMethods()
             cout << "\n=== Метод Якоби ===\n";
             for (float w = 0.01; w < 1.31; w += 0.1)
             {
-                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, true);
+                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, true, offsets, sizes);
             }
             break;
 
@@ -334,7 +282,7 @@ void WorkingWithIterMethods()
             cout << "\n=== Метод Гаусса–Зейделя ===\n";
             for (float w = 0.01; w < 1.70; w += 0.1)
             {
-                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, false);
+                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, false, offsets, sizes);
             }
             break;
         case 3:
@@ -344,7 +292,7 @@ void WorkingWithIterMethods()
             cin >> blockSize;
             for (float w = 0.01; w < 2; w += 0.1)
             {
-                BlockRelaxation(A, y, x0, xTrue, n, m, w, maxIter, blockSize);
+                BlockRelaxation(A, y, x0, xTrue, n, m, w, maxIter, blockSize, offsets, sizes);
             }
             break;
         default:
