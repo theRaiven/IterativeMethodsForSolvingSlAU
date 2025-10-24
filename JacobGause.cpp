@@ -351,6 +351,11 @@ void WorkingWithIterMethods()
                 throw runtime_error("Неверный выбор метода. Введите 1 или 2.");
             }
         }
+        delete[] xTrue; xTrue = nullptr;
+        delete[] x0;    x0 = nullptr;
+        delete[] y;     y = nullptr;
+        delete[] xNew;  xNew = nullptr;
+        delete[] r;     r = nullptr;
     }
     catch (exception& e)
     {
