@@ -48,6 +48,8 @@ constexpr double relativeEPS<double>() { return 1e-15; }
 
 
 void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, string filename);
+void WriteResultsToFile(const std::string& methodName, real w, int iter, real normR,
+    real* x, real* xTrue, int n, const std::string& filename); 
 void CalculatingDimensionDiagonals(int sizes[], int n, int m);
 void PrintMatrixStruct(const Matrix& A, int n, int m);
 

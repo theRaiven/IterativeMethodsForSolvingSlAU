@@ -1,6 +1,5 @@
 ﻿#include "Header.h"
 #include <cmath>
-using namespace std;
 
 struct SolverParams
 {
@@ -84,7 +83,49 @@ void PrintResults(real omega, int iter, real normR, const real* x, const real* x
     cout << endl << endl;
 }
 
-void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* xNew, real* r)
+void IterationStep(const Matrix& A, const real* f, real*& x, real* xNew, int n, int m, const SolverParams& params, int offsets[], int sizes[])
+{
+    for (int i = 0; i < n; i++)
+    {
+        real sum{ 0.0 };
+
+        for (int d = 0; d < 9; ++d)
+        {
+            if (d == 4) continue;
+
+            int offset{ offsets[d] };
+            int j{ i + offset };
+            if (j < 0 || j >= n) continue;
+
+            int i_min{ max(0, -offset) };
+            int idx{ i - i_min };
+            if (idx < 0 || idx >= sizes[d]) continue;
+
+            real aij{ 0.0 };
+            switch (d)
+            {
+            case 0: aij = A.d4l[idx]; break;
+            case 1: aij = A.d3l[idx]; break;
+            case 2: aij = A.d2l[idx]; break;
+            case 3: aij = A.d1l[idx]; break;
+            case 5: aij = A.d1u[idx]; break;
+            case 6: aij = A.d2u[idx]; break;
+            case 7: aij = A.d3u[idx]; break;
+            case 8: aij = A.d4u[idx]; break;
+            default: continue;
+            }
+
+            sum += aij * x[j];
+        }
+
+        real x_next = (f[i] - sum) / A.d0[i];
+        if (params.isJacobi)
+            xNew[i] = x[i] + params.omega * (x_next - x[i]);
+        else
+            x[i] = x[i] + params.omega * (x_next - x[i]);
+    }
+}
+void IterativeMethod(const Matrix& A, real* f, real*& x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* xNew, real* r)
 {
     if (n <= 0 || m < 0)
     {
@@ -107,45 +148,7 @@ void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
 
     for (iter = 1; iter < params.maxIter; iter++)
     {
-        for (int i = 0; i < n; i++)
-        {
-            real sum{ 0.0 };
-
-            for (int d = 0; d < 9; ++d)
-            {
-                int offset = offsets[d];
-                int j = i + offset;
-
-                if (j < 0 || j >= n) continue;
-
-                int i_min = max(0, -offset);
-                int idx = i - i_min;
-
-                if (idx < 0 || idx >= sizes[d]) continue;
-
-                real aij{ 0.0 };
-                switch (d)
-                {
-                case 0: aij = A.d4l[idx]; break;
-                case 1: aij = A.d3l[idx]; break;
-                case 2: aij = A.d2l[idx]; break;
-                case 3: aij = A.d1l[idx]; break;
-                case 5: aij = A.d1u[idx]; break;
-                case 6: aij = A.d2u[idx]; break;
-                case 7: aij = A.d3u[idx]; break;
-                case 8: aij = A.d4u[idx]; break;
-                }
-
-                sum += aij * x[j];
-            }
-
-            real x_next = (f[i] - sum) / A.d0[i];
-
-            if (params.isJacobi)
-                xNew[i] = x[i] + params.omega * (x_next - x[i]);
-            else
-                x[i] = x[i] + params.omega * (x_next - x[i]);
-        }
+        IterationStep(A, f, x, xNew, n, m, params, offsets, sizes);
 
         if (params.isJacobi)
         {
@@ -159,15 +162,15 @@ void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
             cout << "Достигнута требуемая точность решения." << endl;
             break;
         }
-
-        if (iter >= params.maxIter - 1)
-        {
-            cout << "Достигнуто максимальное число итераций." << endl;
-        }
+    }
+    if (iter >= params.maxIter - 1)
+    {
+        cout << "Достигнуто максимальное число итераций." << endl;
     }
 
     PrintResults(params.omega, iter, normR, x, xTrue, n);
-
+    WriteResultsToFile(params.isJacobi ? "Метод Якоби" : "Метод Гаусса–Зейделя",
+        params.omega, iter, normR, x, xTrue, n, "Result.txt");
     for (int i = 0; i < n; i++)
     {
         x[i] = 0;
@@ -175,7 +178,7 @@ void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
         r[i] = 0;
     }
 }
-void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* r)
+void BlockRelaxation(const Matrix& A, real* f, real*& x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* r)
 {
     if (n <= 0 || params.blockSize <= 0 || params.blockSize > n)
     {
@@ -196,20 +199,20 @@ void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
     {
         for (int i0 = 0; i0 < n; i0 += params.blockSize)
         {
-            int i1 = min(i0 + params.blockSize, n);
+            int i1{ min(i0 + params.blockSize, n) };
 
             for (int i = i0; i < i1; i++)
             {
                 real Ax{ 0.0 };
                 for (int d = 0; d < 9; ++d)
                 {
-                    int offset = offsets[d];
-                    int j = i + offset;
+                    int offset{ offsets[d] };
+                    int j{ i + offset };
 
                     if (j < 0 || j >= n) continue;
 
-                    int i_min = max(0, -offset);
-                    int idx = i - i_min;
+                    int i_min{ max(0, -offset) };
+                    int idx{ i - i_min };
 
                     if (idx < 0 || idx >= sizes[d]) continue;
 
@@ -226,16 +229,15 @@ void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
                     case 7: aij = A.d3u[idx]; break;
                     case 8: aij = A.d4u[idx]; break;
                     }
-                    Ax += aij * x[j];
+                    Ax += aij * ((j >= i0 && j < i) ? x[j] : x[j]);
                 }
                 r[i] = f[i] - Ax;
-            }
 
-            for (int i = i0; i < i1; i++)
-            {
+                if (A.d0[i] == 0) throw runtime_error("Деление на Нуль!");
                 real delta = (params.omega * r[i]) / A.d0[i];
                 x[i] += delta;
             }
+
         }
 
         normR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
@@ -248,11 +250,12 @@ void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
     }
     real finalNormR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
     PrintResults(params.omega, iter, finalNormR, x, xTrue, n);
+    WriteResultsToFile("Метод блочной релаксации", params.omega, iter, finalNormR, x, xTrue, n, "Result.txt");
 
     for (int i = 0; i < n; i++)
     {
         x[i] = 0;
-        r[0] = 0;
+        r[i] = 0;
     }
 }
 
@@ -279,13 +282,16 @@ void WorkingWithIterMethods()
         PrintMatrix(xTrue, n);
         PrintMatrix(x0, n);
         PrintMatrix(y, n);
-        while (true)
+
+        bool exit{true};
+        while (exit)
         {
             int methodChoice;
             cout << "\nВыберите метод:\n";
             cout << "1 — Метод Якоби\n";
             cout << "2 — Метод Гаусса–Зейделя\n";
             cout << "3 — Метод Блочной релаксации\n";
+            cout << "0 — Выход\n";
             cout << "Ваш выбор: ";
             cin >> methodChoice;
             cout << endl;
@@ -338,7 +344,9 @@ void WorkingWithIterMethods()
                 }
                 break;
             case 0:
-                exit(0);
+                
+                exit = false;
+                break;
             default:
                 throw runtime_error("Неверный выбор метода. Введите 1 или 2.");
             }

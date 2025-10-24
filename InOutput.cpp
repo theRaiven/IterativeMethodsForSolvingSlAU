@@ -62,6 +62,41 @@ void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& 
         exit(0);
     }
 }
+void WriteResultsToFile(const std::string& methodName, real w, int iter, real normR,
+    real* x, real* xTrue, int n, const std::string& filename)
+{
+    std::ofstream out(filename, std::ios::app);
+    if (!out.is_open())
+    {
+        std::cerr << "Ошибка открытия файла " << filename << std::endl;
+        return;
+    }
+
+    out << "=== " << methodName << " ===\n";
+    out << "Достигнуто ";
+    if (normR < 1e-15)
+        out << "требуемое точность решения.\n";
+    else
+        out << "максимальное число итераций.\n";
+
+    out << "w = " << std::setprecision(15) << w
+        << ", Iter = " << iter
+        << ", normR = " << std::setprecision(15) << normR << "\n";
+
+    out << "i        x_i\n";
+    for (int i = 0; i < n; i++)
+        out << std::setprecision(15) << x[i] << "\n";
+
+    if (xTrue != nullptr)
+    {
+        out << "i        x* _i - x_i\n";
+        for (int i = 0; i < n; i++)
+            out << std::setprecision(15) << xTrue[i] - x[i] << "\n";
+    }
+
+    out << "\nРезультат записан в файл: " << filename << "\n\n";
+    out.close();
+}
 void PrintMatrixStruct(const Matrix& A, int n, int m)
 {
     cout << n << endl;
