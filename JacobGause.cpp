@@ -76,7 +76,6 @@ void PrintResults(real omega, int iter, real normR, const real* x, const real* x
 }
 void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, bool isJacobi, int offsets[], int sizes[])
 {
-    
     if (n <= 0 || m < 0)
     {
         cerr << "Ошибка: некорректные размеры n или m!" << endl;
