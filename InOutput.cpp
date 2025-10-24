@@ -2,13 +2,11 @@
 #include "Header.h"
 void CalculatingDimensionDiagonals(int sizes[], int n, int m)
 {
-
     int k{ 0 };
     for (int i = 3; i > 0; i--)
     {
         sizes[k++] = n - m - i - 1;
     }
-
 
     sizes[k++] = n - 1;
     sizes[k++] = n;
@@ -21,7 +19,6 @@ void CalculatingDimensionDiagonals(int sizes[], int n, int m)
 }
 void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, string filename)
 {
-
     try
     {
         ifstream fin(filename);
@@ -31,28 +28,59 @@ void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& 
             throw runtime_error("Не удалось открыть файл matrixDiag.txt");
         }
 
-        fin >> n >> m;
+        if (!(fin >> n >> m))
+            throw runtime_error("Ошибка чтения размеров матрицы");
+
+        if (n <= 0 || m < 0)
+            throw runtime_error("Некорректные размеры n или m");
+
         int sizes[9];
         CalculatingDimensionDiagonals(sizes, n, m);
-        A.d4l = new real[sizes[0]]; for (int j = 0; j < sizes[0]; j++) fin >> A.d4l[j];
-        A.d3l = new real[sizes[1]]; for (int j = 0; j < sizes[1]; j++) fin >> A.d3l[j];
-        A.d2l = new real[sizes[2]]; for (int j = 0; j < sizes[2]; j++) fin >> A.d2l[j];
-        A.d1l = new real[sizes[3]]; for (int j = 0; j < sizes[3]; j++) fin >> A.d1l[j];
-        A.d0 = new real[sizes[4]]; for (int j = 0; j < sizes[4]; j++) fin >> A.d0[j];
-        A.d1u = new real[sizes[5]]; for (int j = 0; j < sizes[5]; j++) fin >> A.d1u[j];
-        A.d2u = new real[sizes[6]]; for (int j = 0; j < sizes[6]; j++) fin >> A.d2u[j];
-        A.d3u = new real[sizes[7]]; for (int j = 0; j < sizes[7]; j++) fin >> A.d3u[j];
-        A.d4u = new real[sizes[8]]; for (int j = 0; j < sizes[8]; j++) fin >> A.d4u[j];
+        auto readArray = [&](real*& arr, int size, const string& name)
+        {
+            arr = new real[size];
+            for (int i = 0; i < size; i++)
+            {
+                if (!(fin >> arr[i]))
+                    throw runtime_error("Недостаточно данных для " + name);
+            }
+        };
+
+        readArray(A.d4l, sizes[0], "d4l");
+        readArray(A.d3l, sizes[1], "d3l");
+        readArray(A.d2l, sizes[2], "d2l");
+        readArray(A.d1l, sizes[3], "d1l");
+        readArray(A.d0, sizes[4], "d0");
+        readArray(A.d1u, sizes[5], "d1u");
+        readArray(A.d2u, sizes[6], "d2u");
+        readArray(A.d3u, sizes[7], "d3u");
+        readArray(A.d4u, sizes[8], "d4u");
+
+        for (int i = 0; i < sizes[4]; i++)
+        {
+            if (A.d0[i] == 0)
+            {
+                throw runtime_error("Система вырождена: элемент d0[" + to_string(i) + "] = 0");
+            }
+        }
 
 
         xTrue = new real[n];
         x0 = new real[n];
         y = new real[n];
 
-        for (int i = 0; i < n; i++) fin >> xTrue[i];
-        for (int i = 0; i < n; i++) fin >> x0[i];
+        auto readVector = [&](real* vec, int size, const string& name)
+        {
+            for (int i = 0; i < size; i++)
+            {
+                if (!(fin >> vec[i]))
+                    throw runtime_error("Недостаточно данных для вектора " + name);
+            }
+        };
 
-        for (int i = 0; i < n; i++) fin >> y[i];
+        readVector(xTrue, n, "xTrue");
+        readVector(x0, n, "x0");
+        readVector(y, n, "y");
 
         fin.close();
     }
