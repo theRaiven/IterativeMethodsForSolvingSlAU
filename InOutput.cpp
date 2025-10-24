@@ -19,7 +19,7 @@ void CalculatingDimensionDiagonals(int sizes[], int n, int m)
         sizes[k++] = n - m - i - 1;
     }
 }
-void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, int& maxIter, string filename)
+void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, string filename)
 {
 
     try
@@ -51,7 +51,6 @@ void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& 
 
         for (int i = 0; i < n; i++) fin >> xTrue[i];
         for (int i = 0; i < n; i++) fin >> x0[i];
-        fin >> maxIter;
 
         for (int i = 0; i < n; i++) fin >> y[i];
 

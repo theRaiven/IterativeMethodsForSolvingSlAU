@@ -47,7 +47,7 @@ template<>
 constexpr double relativeEPS<double>() { return 1e-15; }
 
 
-void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, int& maxIter, string filename);
+void InputDiagMatrix(Matrix& A, real*& xTrue, real*& x0, real*& y, int& n, int& m, string filename);
 void CalculatingDimensionDiagonals(int sizes[], int n, int m);
 void PrintMatrixStruct(const Matrix& A, int n, int m);
 

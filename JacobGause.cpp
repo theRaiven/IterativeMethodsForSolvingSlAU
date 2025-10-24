@@ -1,6 +1,16 @@
 ﻿#include "Header.h"
 #include <cmath>
 using namespace std;
+
+struct SolverParams
+{
+    real omega{0};
+    int maxIter{10000};
+    bool isJacobi{false};
+    int blockSize{0};
+};
+
+
 void MultiplyMatrixByVector(const Matrix& A, const real* x, real* f, int n, int m, int offsets[], int sizes[])
 {
     for (int i = 0; i < n; i++)
@@ -74,24 +84,21 @@ void PrintResults(real omega, int iter, real normR, const real* x, const real* x
     }
     cout << endl << endl;
 }
-void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, bool isJacobi, int offsets[], int sizes[])
+void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* xNew, real* r)
 {
     if (n <= 0 || m < 0)
     {
         cerr << "Ошибка: некорректные размеры n или m!" << endl;
         return;
     }
-    if (omega <= 0.0 || omega > 2.0)
+    if (params.omega <= 0.0 || params.omega > 2.0)
     {
         cerr << "Ошибка: параметр релаксации ω должен быть в диапазоне (0, 2]!" << endl;
         return;
     }
-    real* xNew = new real[n];
-    real* r = new real[n];
-
     real normR{ 0.0 };
     int iter{ 0 };
-    for (iter = 1; iter < maxIter; iter++)
+    for (iter = 1; iter < params.maxIter; iter++)
     {
         for (int i = 0; i < n; i++)
         {
@@ -127,13 +134,13 @@ void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
 
             real x_next = (f[i] - sum) / A.d0[i];
 
-            if (isJacobi)
-                xNew[i] = x[i] + omega * (x_next - x[i]);
+            if (params.isJacobi)
+                xNew[i] = x[i] + params.omega * (x_next - x[i]);
             else
-                x[i] = x[i] + omega * (x_next - x[i]);
+                x[i] = x[i] + params.omega * (x_next - x[i]);
         }
 
-        if (isJacobi)
+        if (params.isJacobi)
         {
             for (int i = 0; i < n; i++) x[i] = xNew[i];
         }
@@ -146,38 +153,37 @@ void IterativeMethod(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
             break;
         }
 
-        if (iter >= maxIter - 1)
+        if (iter >= params.maxIter - 1)
         {
             cout << "Достигнуто максимальное число итераций." << endl;
         }
     }
 
-    PrintResults(omega, iter, normR, x, xTrue, n);
+    PrintResults(params.omega, iter, normR, x, xTrue, n);
 
     for (int i = 0; i < n; i++)
     {
         x[i] = 0;
+        xNew[i] = 0;
+        r[i] = 0;
     }
-    delete[] xNew;
-    delete[] r;
 }
-void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, real omega, int maxIter, int blockSize, int offsets[], int sizes[])
+void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int m, SolverParams params, int offsets[], int sizes[], real* r)
 {
-    if (n <= 0 || blockSize <= 0 || blockSize > n)
+    if (n <= 0 || params.blockSize <= 0 || params.blockSize > n)
     {
         cerr << "Ошибка: некорректный размер блока!" << endl;
         return;
     }
 
-    real* r = new real[n];
     real normR{ 0.0 };
 
     int iter = 0;
-    for (iter = 1; iter <= maxIter; iter++)
+    for (iter = 1; iter <= params.maxIter; iter++)
     {
-        for (int i0 = 0; i0 < n; i0 += blockSize)
+        for (int i0 = 0; i0 < n; i0 += params.blockSize)
         {
-            int i1 = min(i0 + blockSize, n);
+            int i1 = min(i0 + params.blockSize, n);
 
             for (int i = i0; i < i1; i++)
             {
@@ -214,7 +220,7 @@ void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
 
             for (int i = i0; i < i1; i++)
             {
-                real delta = (omega * r[i]) / A.d0[i];
+                real delta = (params.omega * r[i]) / A.d0[i];
                 x[i] += delta;
             }
         }
@@ -228,19 +234,19 @@ void BlockRelaxation(const Matrix& A, real* f, real* x, real* xTrue, int n, int 
         }
     }
     real finalNormR = CalculateRelativeResidual(A, x, f, n, m, offsets, sizes);
-    PrintResults(omega, iter, finalNormR, x, xTrue, n);
+    PrintResults(params.omega, iter, finalNormR, x, xTrue, n);
 
     for (int i = 0; i < n; i++)
     {
         x[i] = 0;
+        r[0] = 0;
     }
-    delete[] r;
 }
 
 
 void WorkingWithIterMethods()
 {
-	int n, m, maxIter;
+	int n, m;
     real* xTrue = nullptr;
     Matrix A;
     real* x0 = nullptr;
@@ -249,10 +255,13 @@ void WorkingWithIterMethods()
     
     try
     {
-        InputDiagMatrix(A, xTrue, x0, y, n, m, maxIter, "Matrix.txt");
+        InputDiagMatrix(A, xTrue, x0, y, n, m, "Matrix.txt");
         CalculatingDimensionDiagonals(sizes, n, m);
+        SolverParams params;
         int offsets[]{ -4 - m, -3 - m, -2 - m, -1, 0, 1, 2 + m, 3 + m, 4 + m };
-        cout << endl << n << ' ' << m << ' ' << maxIter << endl;
+        real* xNew = new real[n];
+        real* r = new real[n];
+        cout << endl << n << ' ' << m << endl;
         PrintMatrixStruct(A, n, m);
         PrintMatrix(xTrue, n);
         PrintMatrix(x0, n);
@@ -267,31 +276,51 @@ void WorkingWithIterMethods()
         cin >> methodChoice;
         cout << endl;
 
+
+        float w0, w1, v;
+
         switch (methodChoice)
         {
         case 1:
             cout << "\n=== Метод Якоби ===\n";
-            for (float w = 0.01; w < 1.31; w += 0.1)
+            params.maxIter = 100000;
+            params.isJacobi = true;
+            cout << "Задайте диапазон omega через пробел(пример: 0.01 1.61): ";
+            float w0, w1, v;
+            cin >> w0 >> w1;
+            cout << "Задайте скокрость схождения omega (пример: 0.01): ";
+            cin >> v;
+            for (params.omega = w0; params.omega < w1; params.omega += v)
             {
-                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, true, offsets, sizes);
+                IterativeMethod(A, y, x0, xTrue, n, m, params, offsets, sizes, xNew, r);
             }
             break;
 
         case 2:
             cout << "\n=== Метод Гаусса–Зейделя ===\n";
-            for (float w = 0.01; w < 1.70; w += 0.1)
+            params.maxIter = 1000000;
+            params.isJacobi = false;
+            cout << "Задайте диапазон omega через пробел(пример: 0.01 1.61): ";
+            cin >> w0 >> w1;
+            cout << "Задайте скокрость схождения omega (пример: 0.01): ";
+            cin >> v;
+            for (params.omega = w0; params.omega < w1; params.omega +=v )
             {
-                IterativeMethod(A, y, x0, xTrue, n, m, w, maxIter, false, offsets, sizes);
+                IterativeMethod(A, y, x0, xTrue, n, m, params, offsets, sizes, xNew, r);
             }
             break;
         case 3:
             cout << "\n=== Метод блочной релаксации ===\n";
-            int blockSize;
             cout << "Введите размер блока: ";
-            cin >> blockSize;
-            for (float w = 0.01; w < 2; w += 0.1)
+            cin >> params.blockSize;
+            params.maxIter = 1000000;
+            cout << "Задайте диапазон omega через пробел(пример: 0.01 1.61): ";
+            cin >> w0 >> w1;
+            cout << "Задайте скокрость схождения omega (пример: 0.01): ";
+            cin >> v;
+            for (params.omega = w0; params.omega < w1; params.omega += v)
             {
-                BlockRelaxation(A, y, x0, xTrue, n, m, w, maxIter, blockSize, offsets, sizes);
+                BlockRelaxation(A, y, x0, xTrue, n, m, params, offsets, sizes, r);
             }
             break;
         default:
